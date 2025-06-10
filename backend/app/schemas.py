@@ -80,7 +80,7 @@ class ProjectBase(BaseModel):
     assessment_dates: Optional[str] = None
     scope: Optional[str] = None
     team_members: Optional[str] = None
-    metadata: Optional[str] = None
+    project_metadata: Optional[str] = None  # Renamed from 'metadata'
 
 class ProjectCreate(ProjectBase):
     pass
@@ -91,7 +91,7 @@ class ProjectUpdate(BaseModel):
     assessment_dates: Optional[str] = None
     scope: Optional[str] = None
     team_members: Optional[str] = None
-    metadata: Optional[str] = None
+    project_metadata: Optional[str] = None  # Renamed from 'metadata'
 
 class Project(ProjectBase):
     id: int

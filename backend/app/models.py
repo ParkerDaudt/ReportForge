@@ -20,7 +20,7 @@ class Project(Base):
     assessment_dates = Column(String, nullable=True)
     scope = Column(Text, nullable=True)
     team_members = Column(String, nullable=True)
-    metadata = Column(Text, nullable=True)
+    project_metadata = Column(Text, nullable=True)  # Renamed from 'metadata'
 
     findings = relationship("Finding", back_populates="project", cascade="all, delete-orphan")
 
