@@ -6,6 +6,7 @@ import { Link, useLocation } from "react-router-dom";
 const navItems = [
   { label: "Projects", icon: IconFolder, to: "/" },
   { label: "Findings", icon: IconBug, to: "/findings" },
+  { label: "Master Findings", icon: IconBug, to: "/master-findings" },
   { label: "Tags", icon: IconTag, to: "/tags" },
   { label: "Attachments", icon: IconFileText, to: "/attachments" },
   { label: "Templates", icon: IconTemplate, to: "/templates" },

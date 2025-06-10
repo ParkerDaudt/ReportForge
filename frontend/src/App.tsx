@@ -8,6 +8,7 @@ import { TagsPage } from './pages/TagsPage';
 import { AttachmentsPage } from './pages/AttachmentsPage';
 import { TemplatesPage } from './pages/TemplatesPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { MasterFindingsPage } from './pages/MasterFindingsPage';
 
 function App() {
   const [colorScheme, setColorScheme] = React.useState<'light' | 'dark'>('dark');
@@ -35,6 +36,7 @@ function App() {
             <Routes>
               <Route path="/" element={<ProjectsPage />} />
               <Route path="/findings" element={<FindingsPage />} />
+              <Route path="/master-findings" element={<MasterFindingsPage />} />
               <Route path="/tags" element={<TagsPage />} />
               <Route path="/attachments" element={<AttachmentsPage />} />
               <Route path="/templates" element={<TemplatesPage />} />
