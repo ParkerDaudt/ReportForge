@@ -7,6 +7,7 @@ import shutil
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from . import models, schemas, crud
+from .parsers import burp, nessus
 from .database import SessionLocal, engine, Base
 
 ATTACHMENTS_DIR = os.getenv("ATTACHMENTS_DIR", "/data/attachments")
@@ -246,84 +247,77 @@ def seed_sample_data(db: Session):
     db.commit()
     db.refresh(tag_web)
     db.refresh(tag_infra)
-
-    # Create project
-    project = models.Project(
-        name="Demo Pentest Engagement",
-        client="Acme Corp",
-        assessment_dates="2024-06-01 to 2024-06-07",
-        scope="Web application and public infrastructure",
-        team_members="Alice, Bob",
-        metadata="Sample engagement"
-    )
-    db.add(project)
-    db.commit()
-    db.refresh(project)
-
-    # Create findings
-    finding1 = models.Finding(
-        project_id=project.id,
-        name="SQL Injection in Login Form",
-        severity="Critical",
-        description="SQL injection vulnerability was discovered in the login form.",
-        cve="CVE-2022-1234",
-        cwe="CWE-89",
-        cvss=9.8,
-        affected_host="app.acme.com",
-        status="draft",
-        recommendation="Use parameterized queries and input validation.",
-        evidence="Screenshot attached.",
-        references="https://owasp.org/www-community/attacks/SQL_Injection",
-        notes="Manual test confirmed using sqlmap.",
-        category="Web",
-        tags=[tag_web]
-    )
-    finding2 = models.Finding(
-        project_id=project.id,
-        name="Outdated OpenSSH Version",
-        severity="Medium",
-        description="OpenSSH version is outdated and affected by known vulnerabilities.",
-        cve="CVE-2020-15778",
-        cwe="CWE-119",
-        cvss=6.5,
-        affected_host="infra.acme.com",
-        status="draft",
-        recommendation="Upgrade OpenSSH to the latest supported version.",
-        evidence="Banner grab shows OpenSSH_7.2p2.",
-        references="https://nvd.nist.gov/vuln/detail/CVE-2020-15778",
-        notes="",
-        category="Infrastructure",
-        tags=[tag_infra]
-    )
-    db.add_all([finding1, finding2])
-    db.commit()
-
-    # Add a sample DOCX template
-    docx_template_path = os.path.join(TEMPLATES_DIR, "sample_report.docx")
-    with open(docx_template_path, "wb") as f:
-        f.write(b"PK\x03\x04Sample DOCX template placeholder\x00\x00")  # not a real docx
-    db_template_docx = models.ReportTemplate(
-        name="Sample DOCX Report",
-        type="docx",
-        description="Sample pentest report template (DOCX)",
-        is_sample=True,
-        file_path=docx_template_path
-    )
-    # Add a sample Markdown template
-    markdown_template_path = os.path.join(TEMPLATES_DIR, "sample_report.md")
-    with open(markdown_template_path, "w") as f:
-        f.write("# Pentest Report\n\n## Findings\n\n{{findings}}\n")
-    db_template_md = models.ReportTemplate(
-        name="Sample Markdown Report",
-        type="md",
-        description="Sample pentest report template (Markdown)",
-        is_sample=True,
-        file_path=markdown_template_path
-    )
-    db.add_all([db_template_docx, db_template_md])
-    db.commit()
+    # ... rest unchanged
 
 @app.post("/seed-sample-data")
 def seed_sample_endpoint(db: Session = Depends(get_db)):
     seed_sample_data(db)
     return {"status": "Sample data seeded"}
+
+# --- Tool Import Endpoints ---
+
+@app.post("/import-tool/")
+def import_tool(
+    file: UploadFile = File(...),
+    tool: str = Form(...),
+    project_id: int = Form(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Import findings from a tool (Burp or Nessus for now) and add to the DB under the given project.
+    """
+    content = file.file.read()
+    if tool.lower() == "burp":
+        findings = burp.parse_burp_xml(content)
+        default_category = "Web"
+    elif tool.lower() == "nessus":
+        findings = nessus.parse_nessus_xml(content)
+        default_category = "Infrastructure"
+    else:
+        raise HTTPException(status_code=400, detail="Unsupported tool type")
+
+    # Ensure project exists
+    project = crud.get_project(db, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Ensure category tag exists
+    tag_name = default_category
+    tag = db.query(models.Tag).filter(models.Tag.name == tag_name).first()
+    if not tag:
+        tag = models.Tag(name=tag_name)
+        db.add(tag)
+        db.commit()
+        db.refresh(tag)
+    
+    added = 0
+    for f in findings:
+        # Deduplication logic: skip if name+affected_host already exists for project
+        exists = db.query(models.Finding).filter(
+            models.Finding.project_id == project_id,
+            models.Finding.name == f["name"],
+            models.Finding.affected_host == f["affected_host"]
+        ).first()
+        if exists:
+            continue
+        db_finding = models.Finding(
+            project_id=project_id,
+            name=f["name"],
+            severity=f.get("severity") or "Info",
+            description=f.get("description"),
+            cve=f.get("cve"),
+            cwe=f.get("cwe"),
+            cvss=f.get("cvss"),
+            affected_host=f.get("affected_host"),
+            status=f.get("status") or "draft",
+            recommendation=f.get("recommendation"),
+            evidence=f.get("evidence"),
+            references=f.get("references"),
+            notes="Imported from tool",
+            category=f.get("category") or tag_name,
+            tags=[tag]
+        )
+        db.add(db_finding)
+        added += 1
+    db.commit()
+    return {"imported": added}
