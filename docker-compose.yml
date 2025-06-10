@@ -20,4 +20,4 @@ services:
       - ./frontend/public:/app/public
       - ./frontend/src:/app/src
     ports:
-      - "3000:3000"
+      - "5173:3000"
