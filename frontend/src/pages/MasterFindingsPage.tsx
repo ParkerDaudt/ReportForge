@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { TextInput, Notification } from "@mantine/core";
 import api from "../api";
 import {
   Table,
@@ -47,6 +48,8 @@ export function MasterFindingsPage() {
     recommendations: "",
     references: "",
   });
+  const [search, setSearch] = useState("");
+  const [notification, setNotification] = useState<{ color: string; msg: string } | null>(null);
 
   // Clone to Project
   const [cloneModalOpen, setCloneModalOpen] = useState(false);
@@ -96,21 +99,43 @@ export function MasterFindingsPage() {
   };
 
   const handleSubmit = async () => {
-    if (editFinding) {
-      await api.put(`/master-findings/${editFinding.id}`, form);
-    } else {
-      await api.post("/master-findings/", form);
+    try {
+      if (editFinding) {
+        await api.put(`/master-findings/${editFinding.id}`, form);
+        setNotification({ color: "blue", msg: "Master finding updated!" });
+      } else {
+        await api.post("/master-findings/", form);
+        setNotification({ color: "green", msg: "Master finding created!" });
+      }
+      setModalOpen(false);
+      fetchMasterFindings();
+    } catch {
+      setNotification({ color: "red", msg: "Master finding operation failed." });
     }
-    setModalOpen(false);
-    fetchMasterFindings();
   };
 
   const handleDelete = async (finding: MasterFinding) => {
     if (window.confirm(`Delete master finding "${finding.title}"?`)) {
-      await api.delete(`/master-findings/${finding.id}`);
-      fetchMasterFindings();
+      try {
+        await api.delete(`/master-findings/${finding.id}`);
+        setNotification({ color: "orange", msg: "Master finding deleted." });
+        fetchMasterFindings();
+      } catch {
+        setNotification({ color: "red", msg: "Failed to delete master finding." });
+      }
     }
   };
+
+  // Filtered master findings
+  const filteredMasterFindings =
+    !search
+      ? masterFindings
+      : masterFindings.filter(
+          (f) =>
+            f.title.toLowerCase().includes(search.toLowerCase()) ||
+            f.impact.toLowerCase().includes(search.toLowerCase()) ||
+            f.frameworks.join(", ").toLowerCase().includes(search.toLowerCase())
+        );
 
   // Clone to Project workflow
   const openClone = (finding: MasterFinding) => {
@@ -150,6 +175,14 @@ export function MasterFindingsPage() {
         <Title order={2}>Master Findings</Title>
         <Button onClick={openCreate}>Add Master Finding</Button>
       </Group>
+      <TextInput
+        label="Search"
+        placeholder="Filter by title, framework, or impact"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        mb="sm"
+        style={{ maxWidth: 300 }}
+      />
       <Table highlightOnHover>
         <thead>
           <tr>
@@ -160,7 +193,7 @@ export function MasterFindingsPage() {
           </tr>
         </thead>
         <tbody>
-          {masterFindings.map((f) => (
+          {filteredMasterFindings.map((f) => (
             <tr key={f.id}>
               <td>{f.title}</td>
               <td>{f.frameworks.join(", ")}</td>
@@ -236,6 +269,15 @@ export function MasterFindingsPage() {
           <Button onClick={handleSubmit}>{editFinding ? "Update" : "Create"}</Button>
         </Stack>
       </Modal>
+      {notification && (
+        <Notification
+          color={notification.color as any}
+          onClose={() => setNotification(null)}
+          mt="md"
+        >
+          {notification.msg}
+        </Notification>
+      )}
       {/* Clone to Project Modal */}
       <Modal
         opened={cloneModalOpen}

@@ -11,8 +11,9 @@ import {
   ActionIcon,
   Title,
   LoadingOverlay,
+  Notification,
 } from "@mantine/core";
-import { IconEdit, IconTrash } from "@tabler/icons-react";
+import { IconEdit, IconTrash, IconSearch } from "@tabler/icons-react";
 
 type Project = {
   id: number;
@@ -37,6 +38,8 @@ export function ProjectsPage() {
     team_members: "",
     metadata: "",
   });
+  const [search, setSearch] = useState("");
+  const [notification, setNotification] = useState<{ color: string; msg: string } | null>(null);
 
   const fetchProjects = async () => {
     setLoading(true);
@@ -76,21 +79,39 @@ export function ProjectsPage() {
   };
 
   const handleSubmit = async () => {
-    if (editProject) {
-      await api.put(`/projects/${editProject.id}`, form);
-    } else {
-      await api.post("/projects/", form);
+    try {
+      if (editProject) {
+        await api.put(`/projects/${editProject.id}`, form);
+        setNotification({ color: "blue", msg: "Project updated!" });
+      } else {
+        await api.post("/projects/", form);
+        setNotification({ color: "green", msg: "Project created!" });
+      }
+      setModalOpen(false);
+      fetchProjects();
+    } catch {
+      setNotification({ color: "red", msg: "Project operation failed." });
     }
-    setModalOpen(false);
-    fetchProjects();
   };
 
   const handleDelete = async (project: Project) => {
     if (window.confirm(`Delete project "${project.name}"?`)) {
-      await api.delete(`/projects/${project.id}`);
-      fetchProjects();
+      try {
+        await api.delete(`/projects/${project.id}`);
+        setNotification({ color: "orange", msg: "Project deleted." });
+        fetchProjects();
+      } catch {
+        setNotification({ color: "red", msg: "Failed to delete project." });
+      }
     }
   };
+
+  const filtered = !search
+    ? projects
+    : projects.filter((p) =>
+        (p.name || "").toLowerCase().includes(search.toLowerCase()) ||
+        (p.client || "").toLowerCase().includes(search.toLowerCase())
+      );
 
   return (
     <div style={{ position: "relative" }}>
@@ -98,6 +119,15 @@ export function ProjectsPage() {
       <Group position="apart" align="center" mb="md">
         <Title order={2}>Projects</Title>
         <Button onClick={openCreate}>Add Project</Button>
+      </Group>
+      <Group mb="sm">
+        <TextInput
+          icon={<IconSearch size={16} />}
+          placeholder="Search by name or client"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          style={{ maxWidth: 300 }}
+        />
       </Group>
       <Table highlightOnHover>
         <thead>
@@ -110,7 +140,7 @@ export function ProjectsPage() {
           </tr>
         </thead>
         <tbody>
-          {projects.map((p) => (
+          {filtered.map((p) => (
             <tr key={p.id}>
               <td>{p.name}</td>
               <td>{p.client}</td>
@@ -170,6 +200,15 @@ export function ProjectsPage() {
           <Button onClick={handleSubmit}>{editProject ? "Update" : "Create"}</Button>
         </Stack>
       </Modal>
+      {notification && (
+        <Notification
+          color={notification.color as any}
+          onClose={() => setNotification(null)}
+          mt="md"
+        >
+          {notification.msg}
+        </Notification>
+      )}
     </div>
   );
 }
