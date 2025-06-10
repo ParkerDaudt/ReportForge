@@ -8,6 +8,9 @@ class TagBase(BaseModel):
 class TagCreate(TagBase):
     pass
 
+class TagUpdate(BaseModel):
+    name: str
+
 class Tag(TagBase):
     id: int
     class Config:
@@ -45,6 +48,22 @@ class FindingCreate(FindingBase):
     project_id: int
     tag_ids: List[int] = Field(default_factory=list)
 
+class FindingUpdate(BaseModel):
+    name: Optional[str] = None
+    severity: Optional[str] = None
+    description: Optional[str] = None
+    cve: Optional[str] = None
+    cwe: Optional[str] = None
+    cvss: Optional[float] = None
+    affected_host: Optional[str] = None
+    status: Optional[str] = None
+    recommendation: Optional[str] = None
+    evidence: Optional[str] = None
+    references: Optional[str] = None
+    notes: Optional[str] = None
+    category: Optional[str] = None
+    tag_ids: Optional[List[int]] = None
+
 class Finding(FindingBase):
     id: int
     project_id: int
@@ -65,6 +84,14 @@ class ProjectBase(BaseModel):
 
 class ProjectCreate(ProjectBase):
     pass
+
+class ProjectUpdate(BaseModel):
+    name: Optional[str] = None
+    client: Optional[str] = None
+    assessment_dates: Optional[str] = None
+    scope: Optional[str] = None
+    team_members: Optional[str] = None
+    metadata: Optional[str] = None
 
 class Project(ProjectBase):
     id: int
