@@ -100,3 +100,14 @@ class AuditLog(Base):
     finding_id = Column(Integer, ForeignKey("findings.id"), nullable=True)
 
     finding = relationship("Finding", back_populates="audit_logs")
+
+class ScheduledExport(Base):
+    __tablename__ = "scheduled_exports"
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(Integer, ForeignKey("projects.id"))
+    template_id = Column(Integer, ForeignKey("report_templates.id"))
+    frequency = Column(String, nullable=False)  # 'daily', 'weekly', 'monthly'
+    next_run = Column(DateTime, nullable=True)
+    last_run = Column(DateTime, nullable=True)
+    active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)

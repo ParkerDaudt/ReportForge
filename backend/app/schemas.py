@@ -161,3 +161,33 @@ class MasterFinding(MasterFindingBase):
 
     class Config:
         orm_mode = True
+
+# --- Scheduled Export and AuditLogOut Schemas ---
+
+class ScheduledExportBase(BaseModel):
+    project_id: int
+    template_id: int
+    frequency: str  # daily, weekly, monthly
+    active: bool = True
+
+class ScheduledExportCreate(ScheduledExportBase):
+    pass
+
+class ScheduledExport(ScheduledExportBase):
+    id: int
+    next_run: Optional[datetime]
+    last_run: Optional[datetime]
+    created_at: datetime
+    class Config:
+        orm_mode = True
+
+class AuditLogOut(BaseModel):
+    id: int
+    action: str
+    entity_type: str
+    entity_id: int
+    user: Optional[str]
+    timestamp: datetime
+    details: Optional[str]
+    class Config:
+        orm_mode = True

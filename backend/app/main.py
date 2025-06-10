@@ -1,7 +1,10 @@
 import os
 from fastapi import FastAPI, UploadFile, File, Depends, HTTPException
-from fastapi.responses import FileResponse, Response
-from fastapi import Form
+from fastapi.responses import FileResponse, Response, StreamingResponse
+from fastapi import Form, UploadFile
+import zipfile
+import io
+from datetime import datetime, timedelta
 from typing import Optional
 import shutil
 import tempfile
@@ -240,6 +243,51 @@ def delete_report_template(template_id: int, db: Session = Depends(get_db)):
     db.commit()
     return template
 
+# --- Backup/Restore Endpoints ---
+
+@app.get("/backup")
+def download_backup():
+    """
+    Download a ZIP backup of the SQLite DB and attachments.
+    """
+    db_path = os.getenv("DATABASE_URL", "sqlite:////data/app.db").replace("sqlite:///", "")
+    attachments_dir = ATTACHMENTS_DIR
+    mem_zip = io.BytesIO()
+    with zipfile.ZipFile(mem_zip, "w") as zf:
+        # Add DB file
+        if os.path.exists(db_path):
+            zf.write(db_path, arcname="app.db")
+        # Add attachments
+        for root, dirs, files in os.walk(attachments_dir):
+            for file in files:
+                full_path = os.path.join(root, file)
+                rel_path = os.path.relpath(full_path, attachments_dir)
+                zf.write(full_path, arcname=f"attachments/{rel_path}")
+    mem_zip.seek(0)
+    return StreamingResponse(mem_zip, media_type="application/zip", headers={"Content-Disposition": "attachment; filename=backup.zip"})
+
+@app.post("/restore")
+def upload_restore(file: UploadFile = File(...)):
+    """
+    Upload and restore a ZIP archive as the DB and attachments.
+    """
+    db_path = os.getenv("DATABASE_URL", "sqlite:////data/app.db").replace("sqlite:///", "")
+    attachments_dir = ATTACHMENTS_DIR
+    # Save uploaded ZIP
+    contents = file.file.read()
+    mem_zip = io.BytesIO(contents)
+    with zipfile.ZipFile(mem_zip, "r") as zf:
+        for zi in zf.infolist():
+            if zi.filename == "app.db":
+                with open(db_path, "wb") as f:
+                    f.write(zf.read(zi.filename))
+            elif zi.filename.startswith("attachments/"):
+                out_path = os.path.join(attachments_dir, zi.filename.replace("attachments/", ""))
+                os.makedirs(os.path.dirname(out_path), exist_ok=True)
+                with open(out_path, "wb") as f:
+                    f.write(zf.read(zi.filename))
+    return {"status": "Restore complete"}
+
 # --- Report Export Endpoint ---
 
 @app.post("/export-report/")
@@ -395,6 +443,12 @@ def seed_sample_endpoint(db: Session = Depends(get_db)):
     seed_sample_data(db)
     return {"status": "Sample data seeded"}
 
+# --- Audit Log Endpoints ---
+
+@app.get("/audit/", response_model=List[schemas.AuditLogOut])
+def list_audit_logs(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    return crud.get_audit_logs(db, skip=skip, limit=limit)
+
 # --- Master Findings Endpoints ---
 
 @app.post("/master-findings/", response_model=schemas.MasterFinding)
@@ -434,6 +488,25 @@ def delete_master_finding(finding_id: int, db: Session = Depends(get_db)):
     return schemas.MasterFinding(**mf_dict)
 
 # --- Tool Import Endpoints ---
+
+# --- Scheduled Export Endpoints ---
+
+@app.get("/scheduled-exports/", response_model=List[schemas.ScheduledExport])
+def list_scheduled_exports(db: Session = Depends(get_db)):
+    return crud.get_scheduled_exports(db)
+
+@app.post("/scheduled-exports/", response_model=schemas.ScheduledExport)
+def create_scheduled_export(se: schemas.ScheduledExportCreate, db: Session = Depends(get_db)):
+    return crud.create_scheduled_export(db, se)
+
+@app.delete("/scheduled-exports/{se_id}", response_model=schemas.ScheduledExport)
+def delete_scheduled_export(se_id: int, db: Session = Depends(get_db)):
+    se = crud.delete_scheduled_export(db, se_id)
+    if not se:
+        raise HTTPException(status_code=404, detail="Scheduled export not found")
+    return se
+
+# (Stub: background job for running scheduled exports would be implemented with Celery/RQ)
 
 @app.post("/import-tool/")
 def import_tool(

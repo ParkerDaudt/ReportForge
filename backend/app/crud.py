@@ -158,3 +158,31 @@ def delete_master_finding(db: Session, finding_id: int):
     db.delete(db_finding)
     db.commit()
     return db_finding
+
+# --- Scheduled Export CRUD ---
+
+def get_scheduled_exports(db: Session):
+    return db.query(models.ScheduledExport).all()
+
+def create_scheduled_export(db: Session, se: schemas.ScheduledExportCreate):
+    db_se = models.ScheduledExport(
+        project_id=se.project_id,
+        template_id=se.template_id,
+        frequency=se.frequency,
+        active=se.active,
+    )
+    db.add(db_se)
+    db.commit()
+    db.refresh(db_se)
+    return db_se
+
+def delete_scheduled_export(db: Session, se_id: int):
+    se = db.query(models.ScheduledExport).filter(models.ScheduledExport.id == se_id).first()
+    if not se:
+        return None
+    db.delete(se)
+    db.commit()
+    return se
+
+def get_audit_logs(db: Session, skip: int = 0, limit: int = 100):
+    return db.query(models.AuditLog).order_by(models.AuditLog.timestamp.desc()).offset(skip).limit(limit).all()
