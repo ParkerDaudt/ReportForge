@@ -1,8 +1,13 @@
+import os
 from fastapi import FastAPI, UploadFile, File, Depends, HTTPException
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from . import models, schemas, crud
 from .database import SessionLocal, engine, Base
+
+ATTACHMENTS_DIR = os.getenv("ATTACHMENTS_DIR", "/data/attachments")
+os.makedirs(ATTACHMENTS_DIR, exist_ok=True)
 
 app = FastAPI(title="Pentest Reporting Tool API")
 
@@ -116,3 +121,45 @@ def delete_tag(tag_id: int, db: Session = Depends(get_db)):
 @app.post("/audit/", response_model=schemas.AuditLog)
 def create_audit_log(log: schemas.AuditLogCreate, db: Session = Depends(get_db)):
     return crud.create_audit_log(db, log)
+
+# --- Attachments ---
+
+@app.post("/findings/{finding_id}/attachments", response_model=schemas.Attachment)
+def upload_attachment(finding_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    db_finding = crud.get_finding(db, finding_id)
+    if db_finding is None:
+        raise HTTPException(status_code=404, detail="Finding not found")
+    filename = file.filename
+    save_name = f"{finding_id}_{filename}"
+    save_path = os.path.join(ATTACHMENTS_DIR, save_name)
+    with open(save_path, "wb") as f:
+        f.write(file.file.read())
+    # Save attachment to db
+    from .models import Attachment
+    db_attachment = Attachment(
+        finding_id=finding_id,
+        filename=filename,
+        filepath=save_path
+    )
+    db.add(db_attachment)
+    db.commit()
+    db.refresh(db_attachment)
+    return db_attachment
+
+@app.get("/findings/{finding_id}/attachments", response_model=list[schemas.Attachment])
+def list_attachments(finding_id: int, db: Session = Depends(get_db)):
+    db_finding = crud.get_finding(db, finding_id)
+    if db_finding is None:
+        raise HTTPException(status_code=404, detail="Finding not found")
+    return db_finding.attachments
+
+@app.get("/attachments/{attachment_id}/download")
+def download_attachment(attachment_id: int, db: Session = Depends(get_db)):
+    attachment = db.query(models.Attachment).filter(models.Attachment.id == attachment_id).first()
+    if attachment is None or not os.path.exists(attachment.filepath):
+        raise HTTPException(status_code=404, detail="Attachment not found")
+    return FileResponse(
+        path=attachment.filepath,
+        filename=attachment.filename,
+        media_type="application/octet-stream"
+    )
