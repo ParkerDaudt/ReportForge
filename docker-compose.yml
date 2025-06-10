@@ -1,0 +1,23 @@
+version: '3.9'
+
+services:
+  backend:
+    build: ./backend
+    volumes:
+      - ./data:/data
+      - ./backend/app/templates:/app/app/templates
+      - ./backend/app/static:/app/app/static
+    environment:
+      - DATABASE_URL=sqlite:////data/app.db
+    ports:
+      - "8000:8000"
+    depends_on:
+      - frontend
+
+  frontend:
+    build: ./frontend
+    volumes:
+      - ./frontend/public:/app/public
+      - ./frontend/src:/app/src
+    ports:
+      - "3000:3000"
