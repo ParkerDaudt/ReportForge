@@ -114,3 +114,47 @@ def create_audit_log(db: Session, log: schemas.AuditLogCreate):
     db.commit()
     db.refresh(db_log)
     return db_log
+
+# --- MasterFinding CRUD ---
+
+def get_master_finding(db: Session, finding_id: int):
+    return db.query(models.MasterFinding).filter(models.MasterFinding.id == finding_id).first()
+
+def get_master_findings(db: Session, skip: int = 0, limit: int = 100):
+    return db.query(models.MasterFinding).offset(skip).limit(limit).all()
+
+def create_master_finding(db: Session, finding: schemas.MasterFindingCreate):
+    db_finding = models.MasterFinding(
+        title=finding.title,
+        technical_analysis=finding.technical_analysis,
+        impact=finding.impact,
+        frameworks=",".join(finding.frameworks),
+        recommendations=finding.recommendations,
+        references=finding.references,
+    )
+    db.add(db_finding)
+    db.commit()
+    db.refresh(db_finding)
+    return db_finding
+
+def update_master_finding(db: Session, finding_id: int, finding_update: schemas.MasterFindingUpdate):
+    db_finding = get_master_finding(db, finding_id)
+    if not db_finding:
+        return None
+    data = finding_update.dict(exclude_unset=True)
+    if "frameworks" in data and data["frameworks"] is not None:
+        db_finding.frameworks = ",".join(data["frameworks"])
+        data.pop("frameworks")
+    for field, value in data.items():
+        setattr(db_finding, field, value)
+    db.commit()
+    db.refresh(db_finding)
+    return db_finding
+
+def delete_master_finding(db: Session, finding_id: int):
+    db_finding = get_master_finding(db, finding_id)
+    if not db_finding:
+        return None
+    db.delete(db_finding)
+    db.commit()
+    return db_finding

@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from . import models, schemas, crud
 from .parsers import burp, nessus
+from typing import List
 from .database import SessionLocal, engine, Base
 
 ATTACHMENTS_DIR = os.getenv("ATTACHMENTS_DIR", "/data/attachments")
@@ -393,6 +394,44 @@ def seed_sample_data(db: Session):
 def seed_sample_endpoint(db: Session = Depends(get_db)):
     seed_sample_data(db)
     return {"status": "Sample data seeded"}
+
+# --- Master Findings Endpoints ---
+
+@app.post("/master-findings/", response_model=schemas.MasterFinding)
+def create_master_finding(finding: schemas.MasterFindingCreate, db: Session = Depends(get_db)):
+    return crud.create_master_finding(db, finding)
+
+@app.get("/master-findings/", response_model=List[schemas.MasterFinding])
+def list_master_findings(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    return crud.get_master_findings(db, skip=skip, limit=limit)
+
+@app.get("/master-findings/{finding_id}", response_model=schemas.MasterFinding)
+def get_master_finding(finding_id: int, db: Session = Depends(get_db)):
+    db_finding = crud.get_master_finding(db, finding_id)
+    if not db_finding:
+        raise HTTPException(status_code=404, detail="Master finding not found")
+    # Convert frameworks string to list for API
+    mf_dict = db_finding.__dict__.copy()
+    mf_dict["frameworks"] = db_finding.frameworks.split(",") if db_finding.frameworks else []
+    return schemas.MasterFinding(**mf_dict)
+
+@app.put("/master-findings/{finding_id}", response_model=schemas.MasterFinding)
+def update_master_finding(finding_id: int, finding: schemas.MasterFindingUpdate, db: Session = Depends(get_db)):
+    db_finding = crud.update_master_finding(db, finding_id, finding)
+    if not db_finding:
+        raise HTTPException(status_code=404, detail="Master finding not found")
+    mf_dict = db_finding.__dict__.copy()
+    mf_dict["frameworks"] = db_finding.frameworks.split(",") if db_finding.frameworks else []
+    return schemas.MasterFinding(**mf_dict)
+
+@app.delete("/master-findings/{finding_id}", response_model=schemas.MasterFinding)
+def delete_master_finding(finding_id: int, db: Session = Depends(get_db)):
+    db_finding = crud.delete_master_finding(db, finding_id)
+    if not db_finding:
+        raise HTTPException(status_code=404, detail="Master finding not found")
+    mf_dict = db_finding.__dict__.copy()
+    mf_dict["frameworks"] = db_finding.frameworks.split(",") if db_finding.frameworks else []
+    return schemas.MasterFinding(**mf_dict)
 
 # --- Tool Import Endpoints ---
 

@@ -66,6 +66,18 @@ class Attachment(Base):
 
     finding = relationship("Finding", back_populates="attachments")
 
+class MasterFinding(Base):
+    __tablename__ = "master_findings"
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    technical_analysis = Column(Text, nullable=True)
+    impact = Column(Text, nullable=True)
+    frameworks = Column(String, nullable=True)  # Comma-separated NIST/MITRE IDs
+    recommendations = Column(Text, nullable=True)
+    references = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 class ReportTemplate(Base):
     __tablename__ = "report_templates"
     id = Column(Integer, primary_key=True, index=True)

@@ -130,3 +130,34 @@ class AuditLog(AuditLogBase):
     timestamp: datetime
     class Config:
         orm_mode = True
+
+# --- Master Finding Schemas ---
+
+from typing import List
+
+class MasterFindingBase(BaseModel):
+    title: str
+    technical_analysis: str = ""
+    impact: str = ""
+    frameworks: List[str] = []
+    recommendations: str = ""
+    references: str = ""
+
+class MasterFindingCreate(MasterFindingBase):
+    pass
+
+class MasterFindingUpdate(BaseModel):
+    title: str | None = None
+    technical_analysis: str | None = None
+    impact: str | None = None
+    frameworks: List[str] | None = None
+    recommendations: str | None = None
+    references: str | None = None
+
+class MasterFinding(MasterFindingBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        orm_mode = True
