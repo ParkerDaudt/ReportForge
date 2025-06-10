@@ -10,6 +10,7 @@ const navItems = [
   { label: "Tags", icon: IconTag, to: "/tags" },
   { label: "Attachments", icon: IconFileText, to: "/attachments" },
   { label: "Templates", icon: IconTemplate, to: "/templates" },
+  { label: "Import/Export", icon: IconUpload, to: "/import-export" },
   { label: "Settings", icon: IconSettings, to: "/settings" },
 ];
 

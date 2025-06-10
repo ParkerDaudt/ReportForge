@@ -9,6 +9,7 @@ import { AttachmentsPage } from './pages/AttachmentsPage';
 import { TemplatesPage } from './pages/TemplatesPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { MasterFindingsPage } from './pages/MasterFindingsPage';
+import { ImportExportPage } from './pages/ImportExportPage';
 
 function App() {
   const [colorScheme, setColorScheme] = React.useState<'light' | 'dark'>('dark');
@@ -40,6 +41,7 @@ function App() {
               <Route path="/tags" element={<TagsPage />} />
               <Route path="/attachments" element={<AttachmentsPage />} />
               <Route path="/templates" element={<TemplatesPage />} />
+              <Route path="/import-export" element={<ImportExportPage />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Routes>
           </AppShell>
