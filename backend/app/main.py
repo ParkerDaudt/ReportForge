@@ -1,9 +1,11 @@
 import os
 from fastapi import FastAPI, UploadFile, File, Depends, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi import Form
 from typing import Optional
 import shutil
+import tempfile
+from jinja2 import Template as JinjaTemplate
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from . import models, schemas, crud
@@ -236,6 +238,144 @@ def delete_report_template(template_id: int, db: Session = Depends(get_db)):
     db.delete(template)
     db.commit()
     return template
+
+# --- Report Export Endpoint ---
+
+@app.post("/export-report/")
+def export_report(
+    project_id: int = Form(...),
+    template_id: int = Form(...),
+    output_type: Optional[str] = Form(None),
+    db: Session = Depends(get_db)
+):
+    """
+    Generate and download a report for a project using the selected template.
+    """
+    # Look up project and findings
+    project = crud.get_project(db, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    findings = crud.get_findings_by_project(db, project_id)
+    # Look up template
+    template = db.query(models.ReportTemplate).filter(models.ReportTemplate.id == template_id).first()
+    if not template or not os.path.exists(template.file_path):
+        raise HTTPException(status_code=404, detail="Template not found")
+    tpl_type = output_type or template.type
+
+    # Prepare context
+    context = {
+        "project": {
+            "name": project.name,
+            "client": project.client,
+            "assessment_dates": project.assessment_dates,
+            "scope": project.scope,
+            "team_members": project.team_members,
+            "metadata": project.metadata,
+        },
+        "findings": [
+            {
+                "name": f.name,
+                "severity": f.severity,
+                "description": f.description,
+                "cve": f.cve,
+                "cwe": f.cwe,
+                "cvss": f.cvss,
+                "affected_host": f.affected_host,
+                "status": f.status,
+                "recommendation": f.recommendation,
+                "evidence": f.evidence,
+                "references": f.references,
+                "notes": f.notes,
+                "category": f.category,
+                "tags": [t.name for t in f.tags],
+            } for f in findings
+        ]
+    }
+
+    # Markdown/HTML export using Jinja2
+    if tpl_type in ("md", "html"):
+        with open(template.file_path, "r") as f:
+            tpl_content = f.read()
+        # If template uses {{findings}}, render finding sections/table
+        if "{{findings}}" in tpl_content:
+            findings_md = ""
+            for f in context["findings"]:
+                findings_md += (
+                    f"### {f['name']}\n"
+                    f"- Severity: {f['severity']}\n"
+                    f"- CVE: {f['cve']}\n"
+                    f"- CVSS: {f['cvss']}\n"
+                    f"- CWE: {f['cwe']}\n"
+                    f"- Affected Host: {f['affected_host']}\n"
+                    f"- Status: {f['status']}\n"
+                    f"- Tags: {', '.join(f['tags'])}\n"
+                    f"- Category: {f['category']}\n\n"
+                    f"**Description:** {f['description']}\n\n"
+                    f"**Recommendation:** {f['recommendation']}\n\n"
+                    f"**Evidence:** {f['evidence']}\n\n"
+                    f"**References:** {f['references']}\n\n"
+                    f"**Notes:** {f['notes']}\n\n"
+                    "----\n\n"
+                )
+            context["findings_md"] = findings_md
+            tpl_content = tpl_content.replace("{{findings}}", "{{findings_md}}")
+        rendered = JinjaTemplate(tpl_content).render(**context)
+        ext = "md" if tpl_type == "md" else "html"
+        content_type = "text/markdown" if ext == "md" else "text/html"
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=f".{ext}")
+        tmp.write(rendered.encode("utf-8"))
+        tmp.close()
+        return FileResponse(
+            path=tmp.name,
+            filename=f"{project.name}_report.{ext}",
+            media_type=content_type
+        )
+
+    # DOCX export (stub if real docx template not present)
+    elif tpl_type == "docx":
+        try:
+            from docxtpl import DocxTemplate
+            doc = DocxTemplate(template.file_path)
+            # For findings, flatten as a string for now
+            findings_text = ""
+            for f in context["findings"]:
+                findings_text += (
+                    f"Finding: {f['name']}\n"
+                    f"Severity: {f['severity']}\n"
+                    f"CVE: {f['cve']}\n"
+                    f"CVSS: {f['cvss']}\n"
+                    f"CWE: {f['cwe']}\n"
+                    f"Affected Host: {f['affected_host']}\n"
+                    f"Status: {f['status']}\n"
+                    f"Tags: {', '.join(f['tags'])}\n"
+                    f"Category: {f['category']}\n"
+                    f"Description: {f['description']}\n"
+                    f"Recommendation: {f['recommendation']}\n"
+                    f"Evidence: {f['evidence']}\n"
+                    f"References: {f['references']}\n"
+                    f"Notes: {f['notes']}\n"
+                    "-----------------------------\n"
+                )
+            context["findings"] = findings_text
+            doc.render(context)
+            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".docx")
+            doc.save(tmp.name)
+            tmp.close()
+            return FileResponse(
+                path=tmp.name,
+                filename=f"{project.name}_report.docx",
+                media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            )
+        except ImportError:
+            # Fallback: just send the template itself
+            return FileResponse(
+                path=template.file_path,
+                filename=f"{project.name}_report.docx",
+                media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            )
+
+    else:
+        raise HTTPException(status_code=400, detail="Unsupported template/report type")
 
 # --- Sample Data Seeding ---
 
